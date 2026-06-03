@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **Directed handoff** — `add_task.py` gains `--status {inbox,ready,parked}` (default
+  inbox; `--ready` kept as an alias). The `handoff` skill can now route a session's items to
+  a chosen lifecycle state per the user's direction (e.g. "hand off everything to parked"),
+  optionally with a shared directive note.
 - **`prioritise.py` + `prioritise` skill + `/tasks-next` command** — a dependency-aware
   ranking of the `ready/` queue ("what's next?"). Generic, transparent score: due urgency
   + importance + quick-win effort + lead time + a bonus for briefs that unblock others,

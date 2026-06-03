@@ -49,6 +49,18 @@ def test_add_task_defaults_to_inbox(queue):
     assert (queue / "inbox" / "quick-idea.md").read_text().count("status: inbox") == 1
 
 
+def test_add_task_status_parked(queue):
+    # directed handoff: file the brief straight into parked/
+    add_task.main(["--title", "Pause this", "--status", "parked", "--root", str(queue)])
+    text = (queue / "parked" / "pause-this.md").read_text()
+    assert "status: parked" in text
+
+
+def test_add_task_status_ready_matches_ready_flag(queue):
+    add_task.main(["--title", "Via status", "--status", "ready", "--root", str(queue)])
+    assert (queue / "ready" / "via-status.md").is_file()
+
+
 def test_add_task_appends_stdin_to_context(queue, monkeypatch):
     monkeypatch.setattr("sys.stdin", io.StringIO("context from a pipe"))
     add_task.main(["--title", "With stdin", "--root", str(queue), "--stdin"])

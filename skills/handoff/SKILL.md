@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Use when the user wants to STOP a Claude Code session and hand its still-open work to the task queue — "handoff", "I'm done with this session", "stop and queue what's left", "offload this session", "park this and pick it up later". Captures the session's open work items into the queue's inbox/ AND adds a judgement layer of things discussed-but-never-tracked, so nothing is stranded when the session ends.
+description: Use when the user wants to STOP a Claude Code session and hand its still-open work to the task queue — "handoff", "I'm done with this session", "stop and queue what's left", "offload this session", "park this and pick it up later", "hand off everything to parked". Captures the session's open work items into the queue (inbox/ by default, or a directed target like parked/ or ready/) AND adds a judgement layer of things discussed-but-never-tracked, so nothing is stranded when the session ends.
 ---
 
 # handoff
@@ -39,10 +39,33 @@ Before each capture, check for an existing brief and sharpen it instead of dupli
 grep -rl "<keyword>" "$CLAUDE_TASKS_DIR"/{inbox,ready,in-progress,done} 2>/dev/null
 ```
 
+## Directed handoff (steer where the items go)
+
+By default everything lands in `inbox/`. When the user gives a **direction**, interpret it
+and route accordingly — pass `--status <state>` to `add_task.py` and/or a shared directive
+note via `--context`. The target state is one of `inbox` (default), `ready`, or `parked`.
+
+- **"hand off everything to parked"** → file every item with `--status parked`. Parked =
+  consciously suspended; add a one-line directive note so future-you knows why and when to
+  resume, e.g. `--context "Parked from session <date>: paused until <trigger>."`
+- **"hand these off as ready to go"** → `--status ready` (they're actionable as-is).
+- **"park the X work, queue the rest"** → split: the X items `--status parked`, the others
+  default. Use your judgement on which item is which.
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/add_task.py" \
+  --title "<lead with the noun>" \
+  --context "<what + why + the handoff direction>" \
+  --status parked --source claude --commit
+```
+
+If no direction is given, behave as the default sections above (everything to `inbox/`).
+
 ## Step 4 — Report (quiet, tiny)
 
-One short line, never the whole pile. e.g. *"Filed 6 open items + 2 discussed follow-ups
-to the inbox; run `/enrich` to turn them into briefs."*
+One short line, never the whole pile. Name the direction if one was given. e.g.
+*"Parked 6 open items + 2 follow-ups under '<note>'; resume with `/tasks-next` when ready."*
+or *"Filed 6 open items to the inbox; run `/enrich` to turn them into briefs."*
 
 ## Note
 
