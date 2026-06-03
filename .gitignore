@@ -1,0 +1,14 @@
+# python
+.venv/
+.venv*/
+__pycache__/
+*.pyc
+
+# test + coverage + mutation artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+.mutmut-cache
+mutmut-cache
+.mypy_cache/
+.ruff_cache/

@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dev dependencies
+        run: pip install pytest pytest-cov ruff mypy
+      - name: ruff lint
+        run: ruff check scripts/ tests/
+      - name: mypy --strict
+        run: mypy scripts/
+      - name: pytest + 100% coverage gate
+        run: pytest --cov=scripts --cov-report=term-missing
+
+  mutation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dev dependencies
+        run: pip install pytest "mutmut<3"
+      # Mutation gate scoped to the dependency-resolution + config core, kept at zero
+      # survivors. Expanding the gated set to the remaining logic modules is tracked in
+      # the roadmap; presentational/template strings are intentionally not gated.
+      - name: mutation testing (no survivors allowed)
+        run: |
+          mutmut run --paths-to-mutate "scripts/_paths.py,scripts/config.py" || true
+          if mutmut results | grep -q "Survived"; then
+            echo "::error::Surviving mutants found — tests do not fully assert behaviour:"
+            mutmut results
+            exit 1
+          fi
+          echo "No surviving mutants."
