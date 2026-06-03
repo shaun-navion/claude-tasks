@@ -10,6 +10,42 @@ git repo of markdown files: greppable, diffable, syncable, and yours.
 > Status: **v1**. The core capture → structure → see → execute → hand-off loop is here,
 > fully tested. See [Roadmap](#roadmap) for what's deliberately deferred.
 
+## How it works
+
+Two actors, one queue: you drop ideas in, Claude works the ones it can and hands its loose
+ends back. Everything is plain markdown moving between folders:
+
+```mermaid
+flowchart TD
+    you["🧑 You"]
+    claude["🤖 Claude"]
+
+    subgraph queue["your queue · a git repo of markdown briefs"]
+        direction LR
+        inbox["📥 inbox/<br/>raw captures"]
+        ready["✅ ready/<br/>structured briefs"]
+        inprog["🔨 in-progress/"]
+        done["📚 done/<br/>the record"]
+        parked["⏸️ parked/"]
+    end
+
+    you -->|capture this| inbox
+    you -->|remember to…| ready
+    claude -->|spots its own follow-up| ready
+    claude -->|hand off loose ends| inbox
+
+    inbox -->|enrich| ready
+    ready -->|prioritise, then action-task| inprog
+    inprog --> done
+    ready -.->|handoff to parked| parked
+    done -.->|unblocks dependents| ready
+```
+
+A brief only moves forward when it's earned it: raw notes get **enriched** into briefs,
+the **prioritiser** picks the highest-leverage *unblocked* brief, **action-task** runs it,
+and finished briefs stay in `done/` as the record — where they can **unblock** whatever was
+waiting on them. A concrete run-through is in [A worked example](#a-worked-example) below.
+
 ## Why briefs, not to-dos
 
 Most task tools store a title and a due date — too thin for an agent to act on. The unit
@@ -61,6 +97,61 @@ Dependencies are declared with `blockers: [other-id]` or a `depends:<id>` tag, a
 stays blocked until its dependency reaches `done/`, so the queue self-unblocks as work
 lands. Define your own priority-tag weights (e.g. an `urgent`/`frog` convention) under
 `[priority]` in `tasks.toml`; the base ranking is otherwise purely mechanical.
+
+## A worked example
+
+Say you're mid-way through a code review and notice the public API has no rate limiting.
+You don't want to lose the thought, but you don't want to stop either:
+
+> **You:** capture this — the public API has no rate limiting
+
+`raw-capture` drops a one-line note in `inbox/` and you carry on. Later you clear the inbox:
+
+> **You:** enrich the inbox
+
+`enrich` turns that note into a full brief in `ready/`:
+
+```markdown
+---
+id: add-rate-limiting-to-public-api
+title: Add rate limiting to the public API
+status: ready
+type: todo
+importance: 2
+autonomy: full
+due: 2026-07-01
+blockers: [choose-rate-limit-store]
+tags: [security, depends:choose-rate-limit-store]
+---
+
+## Goal
+The public API rejects abusive traffic: each client is capped at N requests/minute
+and over-limit requests get a clear 429.
+
+## Context
+`api/routes/*` currently have no throttle. We need a shared counter store first —
+tracked by the `choose-rate-limit-store` brief.
+
+## Success criteria
+- [ ] Over-limit requests return 429 with a `Retry-After` header
+- [ ] The limit is configurable per route
+- [ ] Covered by tests
+```
+
+Then you ask what to pick up next:
+
+> **You:** what's next?  *(or `/tasks-next`)*
+
+`prioritise` ranks `ready/` — but this brief is **held back**, because its blocker
+`choose-rate-limit-store` isn't in `done/` yet. The prioritiser is dependency-aware, so it
+surfaces the store-choice brief instead. Once that lands in `done/`, the rate-limiting brief
+**self-unblocks** and rises to the top (a security item near its due date). Now:
+
+> **You:** action the rate-limiting task
+
+`action-task` moves it to `in-progress/`, Claude works it end-to-end against the success
+criteria, and it finishes in `done/` — where it stays as the record, and where its
+completion is what unblocked anything waiting on *it*.
 
 ## The queue
 
