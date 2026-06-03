@@ -2,5 +2,20 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "automerge": true,
+  "platformAutomerge": false,
+  "packageRules": [
+    {
+      "description": "Auto-merge every update type once CI is green (Renovate waits for checks before merging).",
+      "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
+      "automerge": true
+    },
+    {
+      "description": "Pin CI Python: mutmut<3 cannot run on 3.14, so do not bump the workflow python-version.",
+      "matchManagers": ["github-actions"],
+      "matchDepNames": ["python"],
+      "enabled": false
+    }
   ]
 }
