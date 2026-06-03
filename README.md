@@ -47,10 +47,20 @@ how the scripts will find it.
 | "remember to…" / Claude spots a follow-up | **queue-task** | a full brief is minted |
 | "capture this" (mid-flow) | **raw-capture** | a raw note lands in `inbox/` |
 | "enrich the inbox" | **enrich** | raw notes become structured briefs |
+| "what's next?" / `/tasks-next` | **prioritise** | ranks the queue (dependency-aware) |
 | "action the X task" | **action-task** | Claude executes a brief end-to-end |
 | "show the board" / `/tasks-board` | — | regenerates `view/board.html` |
 | "I'm done, hand off" | **handoff** | the session's open work flows to the queue |
 | "recap" | **recap** | a quick in-chat status summary |
+
+### Priorities and dependencies
+
+`prioritise` (the `/tasks-next` command) ranks `ready/` briefs by due urgency, importance,
+quick-win effort, lead time, and — crucially — how many other briefs each one **unblocks**.
+Dependencies are declared with `blockers: [other-id]` or a `depends:<id>` tag, and a brief
+stays blocked until its dependency reaches `done/`, so the queue self-unblocks as work
+lands. Define your own priority-tag weights (e.g. an `urgent`/`frog` convention) under
+`[priority]` in `tasks.toml`; the base ranking is otherwise purely mechanical.
 
 ## The queue
 
@@ -109,7 +119,9 @@ Deliberately not in v1, designed to bolt on without changing the engine:
   for open Task-API/TodoWrite items and files them (idempotent via a marker). Today the
   `handoff` skill does this model-driven, on demand.
 - **session-browser** — browse/resume recent sessions; render one session as a board.
-- **Strategic prioritisation** — rank the whole estate by a configurable leverage score.
+- **Leverage prioritisation** — the generic, mechanical prioritiser ships in v1
+  (`prioritise`); a richer whole-estate ranking by a configurable leverage score
+  (emotional weight × reduces-load × urgency × compounding) is the deferred personal variant.
 - **External routing** — push real-world tasks to another task system.
 - **Autonomous worker** — a scheduled loop that drains the `autonomy: full` queue.
 

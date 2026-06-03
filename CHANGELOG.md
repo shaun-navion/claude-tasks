@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **`prioritise.py` + `prioritise` skill + `/tasks-next` command** — a dependency-aware
+  ranking of the `ready/` queue ("what's next?"). Generic, transparent score: due urgency
+  + importance + quick-win effort + lead time + a bonus for briefs that unblock others,
+  plus optional `[priority] tag_weights` from `tasks.toml`.
+- **Real dependency handling** — `blockers:` ids and `depends:<id>` tags are resolved
+  against the queue; a brief stays blocked until its dependency reaches `done/`, and
+  briefs that unblock more others rank higher.
+
 ## 0.1.0 — initial release
 
 First generic, open-sourceable extraction of a personal task-queue system into a Claude
