@@ -150,8 +150,43 @@ def _append_log(text: str, today: str, message: str) -> str:
     return text.rstrip("\n") + "\n\n## Execution log\n\n" + line + "\n"
 
 
+# A markdown task box at the start of a list item: `- [ ]` / `* [ ]`, any indent.
+_UNCHECKED_BOX = re.compile(r"^(\s*[-*]\s+)\[ \]")
+
+
+def _check_success_criteria(text: str) -> tuple[str, int]:
+    """Tick every unchecked `- [ ]` box inside the Success criteria section to `- [x]`.
+
+    A brief moved to `done` used to keep its criteria unchecked, so a finished brief
+    read as if nothing had been accomplished. This reconciles that display state.
+
+    Scoped to the one section (its heading through the next `## ` heading or EOF) so
+    checklists elsewhere -- Notes, Constraints -- are left alone. Indentation is
+    preserved. Returns (new_text, n_ticked); a brief with no such section is returned
+    unchanged with n_ticked == 0. Idempotent: already-checked boxes are not recounted.
+    """
+    out: list[str] = []
+    in_section = False
+    n = 0
+    for line in text.splitlines(keepends=True):
+        stripped = line.lstrip()
+        if stripped.startswith("## "):
+            in_section = stripped.rstrip().lower() == "## success criteria"
+            out.append(line)
+            continue
+        if in_section:
+            new_line, count = _UNCHECKED_BOX.subn(r"\1[x]", line)
+            if count:
+                n += 1
+                out.append(new_line)
+                continue
+        out.append(line)
+    return "".join(out), n
+
+
 def move_brief(brief_id: str, new_status: str, root: pathlib.Path,
-               log: str | None = None, today: str | None = None) -> pathlib.Path:
+               log: str | None = None, today: str | None = None,
+               check_criteria: bool = True) -> pathlib.Path:
     """Transition a brief to `new_status`: update frontmatter, log it, move the file.
 
     The read-modify-write-rename is wrapped in repo_lock so two concurrent actors moving
@@ -184,6 +219,8 @@ def move_brief(brief_id: str, new_status: str, root: pathlib.Path,
             )
         text = path.read_text()
         text = _update_frontmatter(text, new_status, today)
+        if new_status == "done" and check_criteria:
+            text, _ = _check_success_criteria(text)
         text = _append_log(text, today, message)
         new_path = root / new_status / f"{brief_id}.md"
         atomic_write(new_path, text)
@@ -214,6 +251,9 @@ def main(argv: list[str] | None = None) -> None:
     m.add_argument("--log", default=None, help="execution-log line (default per target state)")
     m.add_argument("--today", default=None, help="override date (testing)")
     m.add_argument("--no-sync", action="store_true", help="skip the git commit/push")
+    m.add_argument("--keep-unchecked", action="store_true",
+                   help="moving to done: do NOT auto-tick the Success criteria boxes "
+                        "(use when a brief is closed without meeting every criterion)")
 
     a = ap.parse_args(argv)
     root = pathlib.Path(a.root) if a.root else resolve_root()
@@ -233,14 +273,23 @@ def main(argv: list[str] | None = None) -> None:
         _print_table(hits)
         return
 
+    # Count the boxes the done-transition will tick, so the move can report it.
+    ticked = 0
+    if a.status == "done" and not a.keep_unchecked:
+        src = find_brief(a.brief_id, root)
+        if src is not None:
+            _, ticked = _check_success_criteria(src.read_text())
     try:
-        new_path = move_brief(a.brief_id, a.status, root, log=a.log, today=a.today)
+        new_path = move_brief(a.brief_id, a.status, root, log=a.log, today=a.today,
+                              check_criteria=not a.keep_unchecked)
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)
     if not a.no_sync:
         sync_commit(f"brief({a.brief_id}): → {a.status}", root)
     print(f"{a.brief_id} → {a.status}: {new_path}")
+    if ticked:
+        print(f"  ticked {ticked} success-criteria checkbox(es)")
 
 
 if __name__ == "__main__":
