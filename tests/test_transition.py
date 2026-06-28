@@ -421,3 +421,121 @@ def test_move_brief_lock_timeout_raises(root, monkeypatch):
     monkeypatch.setattr(transition, "repo_lock", fake_lock)
     with pytest.raises(RuntimeError, match="timed out"):
         transition.move_brief("rotate-the-api-key", "in-progress", root)
+
+
+# --------------------------------------------------------------------------- #
+# Success-criteria checkbox sync on move -> done
+# A brief moved to done left its `- [ ]` boxes unchecked, so a "done" brief read
+# as if nothing was accomplished. The done transition now ticks them (scoped to
+# the Success criteria section), with a --keep-unchecked opt-out for descoped work.
+# --------------------------------------------------------------------------- #
+def _brief_with_criteria(status="in-progress", bid="ship-the-thing",
+                         boxes=("first criterion", "second criterion"),
+                         checked=False):
+    """A brief carrying a Success criteria checklist plus a Notes checklist.
+
+    The Notes box is the canary: section-scoped ticking must never touch it.
+    """
+    mark = "x" if checked else " "
+    crit = "\n".join(f"- [{mark}] {b}" for b in boxes)
+    return f"""---
+id: {bid}
+title: Ship the thing
+created: 2026-06-01
+updated: 2026-06-01
+status: {status}
+type: todo
+importance: 2
+autonomy: full
+estimated-effort: m
+due:
+domain:
+parent:
+source: claude
+blockers: []
+related: []
+---
+
+## Goal
+
+Ship it.
+
+## Success criteria
+
+{crit}
+
+## Notes
+
+- [ ] a note checkbox that must NOT be auto-ticked
+
+## Execution log
+
+2026-06-01: captured.
+"""
+
+
+def test_check_criteria_ticks_unchecked_boxes():
+    text, n = transition._check_success_criteria(_brief_with_criteria())
+    assert n == 2
+    assert text.count("- [x]") == 2
+    assert "- [ ] a note checkbox that must NOT be auto-ticked" in text
+
+
+def test_check_criteria_no_section_is_noop():
+    plain = _brief("done", "x", "T")  # fixture brief has no Success criteria section
+    out, n = transition._check_success_criteria(plain)
+    assert n == 0
+    assert out == plain
+
+
+def test_check_criteria_already_checked_is_idempotent():
+    text, n = transition._check_success_criteria(_brief_with_criteria(checked=True))
+    assert n == 0
+    # nothing left unchecked within the Success criteria section
+    assert "- [ ]" not in text.split("## Notes")[0]
+
+
+def test_check_criteria_preserves_indentation():
+    out, n = transition._check_success_criteria(
+        "## Success criteria\n\n  - [ ] nested item\n"
+    )
+    assert n == 1
+    assert "  - [x] nested item" in out
+
+
+def test_move_done_ticks_success_criteria(root):
+    (root / "in-progress" / "ship-the-thing.md").write_text(_brief_with_criteria())
+    p = transition.move_brief("ship-the-thing", "done", root, today="2026-06-02")
+    content = p.read_text()
+    assert content.count("- [x]") == 2
+    assert "- [ ] a note checkbox that must NOT be auto-ticked" in content
+
+
+def test_move_done_keep_unchecked_preserves_boxes(root):
+    (root / "in-progress" / "ship-the-thing.md").write_text(_brief_with_criteria())
+    p = transition.move_brief(
+        "ship-the-thing", "done", root, today="2026-06-02", check_criteria=False
+    )
+    assert "- [ ] first criterion" in p.read_text()
+
+
+def test_move_to_non_done_does_not_tick(root):
+    (root / "ready" / "ship-the-thing.md").write_text(_brief_with_criteria(status="ready"))
+    p = transition.move_brief("ship-the-thing", "in-progress", root, today="2026-06-02")
+    assert "- [ ] first criterion" in p.read_text()
+
+
+def test_main_move_done_reports_ticked(root, monkeypatch, capsys):
+    monkeypatch.setattr(transition, "sync_commit", lambda *a, **k: True)
+    (root / "in-progress" / "ship-the-thing.md").write_text(_brief_with_criteria())
+    transition.main(["move", "ship-the-thing", "done",
+                     "--root", str(root), "--today", "2026-06-02"])
+    assert "ticked 2" in capsys.readouterr().out.lower()
+
+
+def test_main_move_done_keep_unchecked_flag(root, monkeypatch, capsys):
+    monkeypatch.setattr(transition, "sync_commit", lambda *a, **k: True)
+    (root / "in-progress" / "ship-the-thing.md").write_text(_brief_with_criteria())
+    transition.main(["move", "ship-the-thing", "done", "--keep-unchecked",
+                     "--root", str(root), "--today", "2026-06-02"])
+    assert "- [ ] first criterion" in (root / "done" / "ship-the-thing.md").read_text()
