@@ -130,3 +130,36 @@ def test_main_uses_resolver_and_config(tmp_path, monkeypatch):
     page = (root / "view" / "board.html").read_text()
     assert "Resolved Name" in page
     assert "Just one" in page
+
+
+# ── tags: chips + searchable, and live column counts ─────────────────────────
+
+def test_parse_tags_handles_bracketed_and_bare_lists():
+    assert build_board.parse_tags("[security, depends:other-id, token-efficiency]") == [
+        "security", "depends:other-id", "token-efficiency"]
+    assert build_board.parse_tags("a, b") == ["a", "b"]
+    assert build_board.parse_tags("") == []
+    assert build_board.parse_tags("[]") == []
+
+
+def test_tags_render_as_chips_and_are_searchable(tmp_path):
+    root = init_queue.init_queue(tmp_path / "q", name="demo")
+    text = _brief("tagged", title="Tagged brief").replace(
+        "parent: \n", "parent: \ntags: [security, token-efficiency]\n")
+    _write(root, "ready", "tagged.md", text)
+    build_board.build(root, "demo")
+    html_out = (root / "view" / "board.html").read_text()
+    assert '<span class="chip tag">security</span>' in html_out
+    assert '<span class="chip tag hot">token-efficiency</span>' in html_out, "token-efficiency is the orange chip"
+    card = html_out[html_out.index('data-text="tagged brief'):]
+    assert "token-efficiency" in card[:card.index('">')], "tags are folded into the card's searchable data-text"
+    assert ".chip.tag.hot{" in html_out
+
+
+def test_column_counts_follow_the_search_filter(tmp_path):
+    root = init_queue.init_queue(tmp_path / "q", name="demo")
+    _write(root, "ready", "a.md", _brief("a"))
+    build_board.build(root, "demo")
+    html_out = (root / "view" / "board.html").read_text()
+    # the filter() pass recounts visible cards into each column's badge
+    assert "badge.textContent=col.querySelectorAll('.card:not(.hide)').length" in html_out
