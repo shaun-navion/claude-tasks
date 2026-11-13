@@ -52,18 +52,20 @@ context that's already discoverable.
 
 ### 3. Fill the brief fully
 
+Start from what the capture already says. A non-default `importance` and any existing `tags` on the inbox file are carried forward, not re-derived (see the table); the heuristics below fill gaps, they never override a value a human already set.
+
 | Field | Guidance |
 |---|---|
 | `title` | Scannable one-liner, lead with the noun |
 | `goal` | End state, not "do X" |
 | `context` | Everything a zero-context agent needs (paths, repos, links, why) |
 | `criteria` | Checkable conditions — if you can't check it, rewrite it |
-| `importance` | 1–4 (default 3 unless clearly urgent/strategic) |
+| `importance` | 1-4. **Read the capture's existing value FIRST.** If the inbox file already carries a non-default importance (anything other than blank or `3`), preserve it exactly: a manual bump on an inbox item is a decision, not a default, and re-deriving it silently undoes the edit. Only derive heuristically (default 3 unless clearly urgent/strategic) when the capture has `importance: 3` or no importance field. |
 | `autonomy` | Honest: `full` ONLY if a future agent can complete end-to-end with zero user input |
 | `estimated-effort` | xs / s / m / l / xl |
 | `complexity` | **Always populate.** `mechanical` = deterministic work (scripted edits, dedup grep, data moves, fill-a-template) a cheap model can do reliably; `judgment` = needs top-tier reasoning (design, real ambiguity, multi-file architecture, client-facing judgement). Drives model routing in action-task (mechanical -> cheap model like Sonnet/Haiku, judgment -> top tier like Opus). When unsure, mark `judgment`. |
 | `domain` | one of the domains in `tasks.toml` |
-| `tags` | free-form labels (e.g. `depends:<other-id>`) |
+| `tags` | free-form labels (e.g. `depends:<other-id>`). **Merge, never overwrite:** carry forward every tag already on the capture (especially `depends:*` dependency links and `source:*` / `surfaced:*` provenance tags) and add new ones alongside them. |
 | `requires-local` | `true` if the brief needs local-machine files or creds |
 | `requires-repo` | repo slug if the brief needs a repo other than this queue |
 
