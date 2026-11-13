@@ -42,6 +42,14 @@ def section(body: str, name: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+def parse_tags(raw: str) -> list[str]:
+    """Frontmatter `tags:` arrives as the raw string '[a, b]'. Return a clean list."""
+    raw = (raw or "").strip()
+    if raw.startswith("[") and raw.endswith("]"):
+        raw = raw[1:-1]
+    return [t.strip() for t in raw.split(",") if t.strip()]
+
+
 def load_briefs(root: pathlib.Path) -> list[dict[str, Any]]:
     briefs: list[dict[str, Any]] = []
     for d in DIRS:
@@ -66,6 +74,7 @@ def load_briefs(root: pathlib.Path) -> list[dict[str, Any]]:
                 "type": fm.get("type", "todo"), "importance": fm.get("importance", "3"),
                 "autonomy": fm.get("autonomy", "needs-input"), "effort": fm.get("estimated-effort", ""),
                 "domain": fm.get("domain", ""), "parent": fm.get("parent", "") or "",
+                "tags": fm.get("tags", "") or "",
                 "goal": goal if goal != "# TODO" else "", "crit": crit,
                 "crit_done": done, "crit_total": total,
             })
@@ -103,13 +112,16 @@ def card_html(b: dict[str, Any], child_of_epic: bool = False) -> str:
         body = f'<div class="body">{goal}{("<ul class=crit>"+crit_html+"</ul>") if crit_html else ""}</div>'
     effort = f'<span class="chip eff">{html.escape(b["effort"])}</span>' if b["effort"].strip() else ""
     domain = f'<span class="chip dom">{html.escape(b["domain"])}</span>' if b["domain"] else ""
-    return f'''<div class="card {('child' if child_of_epic else '')}" data-autonomy="{b['autonomy']}" data-text="{html.escape((b['title']+' '+b['domain']+' '+b['goal']).lower())}">
+    tags = parse_tags(b.get("tags", ""))
+    tag_chips = "".join(f'<span class="chip tag{(" hot" if t == "token-efficiency" else "")}">{html.escape(t)}</span>' for t in tags)
+    tag_text = " ".join(tags)
+    return f'''<div class="card {('child' if child_of_epic else '')}" data-autonomy="{b['autonomy']}" data-text="{html.escape((b['title']+' '+b['domain']+' '+b['goal']+' '+tag_text).lower())}">
   <div class="head" onclick="this.parentNode.classList.toggle('open')">
     <span class="pri p{p}">P{p}</span>
     <span class="title">{html.escape(b['title'])}</span>
     <span class="auto {a_cls}" title="{a_tip}">{a_label}</span>
   </div>
-  <div class="meta"><span class="chip id">{pid}</span>{domain}{effort}{prog}</div>
+  <div class="meta"><span class="chip id">{pid}</span>{domain}{effort}{tag_chips}{prog}</div>
   {body}
 </div>'''
 
@@ -181,6 +193,8 @@ header .sub{{color:var(--mut);font-size:12.5px;margin-top:3px}}
 .meta{{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:7px}}
 .chip{{font-size:10.5px;color:var(--mut);background:#20242d;border:1px solid var(--line);border-radius:6px;padding:1px 7px}}
 .chip.id{{font-family:ui-monospace,Menlo,monospace;color:#7d8694}}
+.chip.tag{{color:#9aa4b2;background:#1a1f27}}
+.chip.tag.hot{{color:#fff;background:#DF5911;border-color:#DF5911;font-weight:600}}
 .body{{display:none;margin-top:9px;padding-top:9px;border-top:1px dashed var(--line)}}
 .card.open .body{{display:block}}
 .goal{{margin:0 0 8px;color:#c9d1d9;font-size:12.5px}}
@@ -223,6 +237,10 @@ function filter(){{
   document.querySelectorAll('.epic').forEach(e=>{{
     let vis=[...e.querySelectorAll('.card')].some(c=>!c.classList.contains('hide'));
     e.classList.toggle('hide',!vis);
+  }});
+  document.querySelectorAll('.col').forEach(col=>{{
+    let badge=col.querySelector('h2 .n');
+    if(badge)badge.textContent=col.querySelectorAll('.card:not(.hide)').length;
   }});
 }}
 </script></body></html>"""
